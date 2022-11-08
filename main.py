@@ -51,7 +51,7 @@ def queryData():
     response_json = dict()
     try:
         response = requests.get(
-            "https://api.coingecko.com/api/v3/simple/price?ids=fx-coin%2Cpundi-x-2%2Cpundi-x-purse%2Ctether%2Cusd-coin%2Cdai&vs_currencies=usd")
+            "https://api.coingecko.com/api/v3/simple/price?ids=fx-coin%2Cpundi-x-2%2Cpundi-x-purse%2Ctether%2Cusd-coin%2Cdai%2Cweth&vs_currencies=usd")
         response_json = response.json()
     except Exception as exception:
         print("Could not access the API endpoint from CoinGecko")
@@ -72,6 +72,7 @@ def queryData():
         "USDT": "tether",
         "PUNDIX": "pundi-x-2",
         "PURSE": "pundi-x-purse",
+        "WETH": "weth",
     }
     six_decimal_tokens = {"USDC", "USDT"}
 

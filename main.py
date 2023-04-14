@@ -4,7 +4,6 @@ from web3 import Web3
 from web3.logs import STRICT, IGNORE, DISCARD, WARN
 from typing import List
 from math import *
-import pandas as pd
 import requests
 from ast import literal_eval
 import time
@@ -15,15 +14,14 @@ import os
 from dotenv import load_dotenv
 import urllib.parse
 import logging
-import datetime
 
 # Connect Ethereum node
 try:
     start_time = time.time()
     fxcore_testnet = "https://fx-json-web3.functionx.io:8545"  # fxcore mainnet
     web3 = Web3(Web3.HTTPProvider(fxcore_testnet))
-    # print("Connected to the fxcore ?", web3.isConnected())
-    # print("Latest block number ?", web3.eth.blockNumber)
+    print("Connected to the fxcore ?", web3.isConnected())
+    print("Latest block number ?", web3.eth.blockNumber)
     rewarderJson = open("./abi/RewarderViaMultiplier.json")
     rewarderAbi = json.load(rewarderJson)
     lpJson = open("./abi/FXSwapV2Pair.json")
@@ -43,7 +41,7 @@ try:
     mongoDBPW = os.getenv("MONGODB_PASSWORD")
 
 except Exception as e:
-    print(datetime.datetime.now(), "Unable to connect to the fxcore")
+    print("Unable to connect to the fxcore")
     logging.error(e)
 
 
@@ -54,13 +52,12 @@ except Exception as e:
 def queryData():
     response_json = dict()
     try:
-        response = requests.get(
-            "https://api.coingecko.com/api/v3/simple/price?ids=fx-coin%2Cpundi-x-2%2Cpundi-x-purse%2Ctether%2Cusd-coin%2Cdai%2Cweth&vs_currencies=usd")
+        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=fx-coin%2Cpundi-x-2%2Cpundi-x-purse%2Ctether%2Cusd-coin%2Cdai%2Cweth%2Cbaklava&vs_currencies=usd")
         response_json = response.json()
     except Exception as exception:
-        print(datetime.datetime.now(), "Could not access the API endpoint from CoinGecko")
+        print("Could not access the API endpoint from CoinGecko")
         logging.error(exception)
-    # print(response_json)
+    print(response_json)
     pool_length = Master_Farm_Contract.functions.poolLength().call()
     total_alloc_point = Master_Farm_Contract.functions.totalAllocPoint().call()
     reward_per_block = Master_Farm_Contract.functions.rewardPerBlock().call()
@@ -68,10 +65,10 @@ def queryData():
 
     # fxg_LP_TSupply = FXG_WFX_LP_Token_Contract.functions.totalSupply().call()
     token_reserve = FXG_WFX_LP_Token_Contract.functions.getReserves().call()
-    fxg_per_fx = token_reserve[0] / token_reserve[1]
-    response_json["FXG"] = {"usd": response_json["fx-coin"]["usd"] / fxg_per_fx}
+    fxg_per_fx = token_reserve[0]/token_reserve[1]
+    response_json["FXG"] = {"usd": response_json["fx-coin"]["usd"]/fxg_per_fx}
     # response_json.add("FXG", {"usd":fxg_per_fx * response_json["fx-coin"]["usd"]})
-    # print(response_json["FXG"]["usd"])
+    print(response_json["FXG"]["usd"])
 
     tvl_dict = {"tvl": dict()}
     apr_dict = {"apr": dict()}
@@ -85,7 +82,8 @@ def queryData():
         "PUNDIX": "pundi-x-2",
         "PURSE": "pundi-x-purse",
         "WETH": "weth",
-        "FXG": "FoxGaming"
+        "FXG": "FoxGaming",
+        "BAVA": "baklava"
     }
 
     six_decimal_tokens = {"USDC", "USDT"}
@@ -112,18 +110,18 @@ def queryData():
         # print("lp_token_deposited: ", lp_token_deposited)
         lp_token_a_symbol = lp_token_a_contract.functions.symbol().call()
         lp_token_b_symbol = lp_token_b_contract.functions.symbol().call()
-
-        # print("lp_token_a_symbol", lp_token_a_symbol, "lp_token_b_symbol", lp_token_b_symbol)
+        
+        print("lp_token_a_symbol", lp_token_a_symbol, "lp_token_b_symbol", lp_token_b_symbol)
         if lp_token_a_symbol == "FXG":
-            token_a_price = fxg_per_fx * response_json[token_symbol_to_name_mapping["WFX"]]["usd"]
+            token_a_price = response_json[token_symbol_to_name_mapping["WFX"]]["usd"] / fxg_per_fx
         else:
             token_a_price = response_json[token_symbol_to_name_mapping[lp_token_a_symbol]]["usd"]
-
+        
         if lp_token_b_symbol == "FXG":
-            token_b_price = fxg_per_fx * response_json[token_symbol_to_name_mapping["WFX"]]["usd"]
+            token_b_price =  response_json[token_symbol_to_name_mapping["WFX"]]["usd"] / fxg_per_fx
         else:
             token_b_price = response_json[token_symbol_to_name_mapping[lp_token_b_symbol]]["usd"]
-
+        
         # we are checking if a token is a 6 decimal coin
         if lp_token_a_symbol in six_decimal_tokens:
             token_a_price *= 10 ** 12
@@ -141,36 +139,41 @@ def queryData():
             wfx_price = response_json[token_symbol_to_name_mapping["WFX"]]["usd"]
             if rewarder_address == "0x0000000000000000000000000000000000000000":
                 apr = (
-                              (
-                                      15000
-                                      * 365
-                                      * bonus_multiplier
-                                      * alloc_point
-                                      * web3.fromWei(reward_per_block, "ether")
-                                      * decimal.Decimal(wfx_price)
-                              )
-                              / (tvl * total_alloc_point)
-                      ) * 100
+                          (
+                                  15000
+                                  * 365
+                                  * bonus_multiplier
+                                  * alloc_point
+                                  * web3.fromWei(reward_per_block, "ether")
+                                  * decimal.Decimal(wfx_price)
+                          )
+                          / (tvl * total_alloc_point)
+                  ) * 100
             else:
+                # this is only for FXG and BAVA (2023-03-13)
+                # this is only for pools that have BONUS tokens
+                print(1)
                 rewarder_contract = web3.eth.contract(address=rewarder_address, abi=rewarderAbi)
                 reward_Multiplier = rewarder_contract.functions.getRewardMultipliers().call()
                 reward_Token = rewarder_contract.functions.getRewardTokens().call()
                 rewardTokenAmount = (
-                        15000
-                        * 365
-                        * bonus_multiplier
-                        * alloc_point
-                        * web3.fromWei(reward_per_block, "ether")
-                )
+                                  15000
+                                  * 365
+                                  * bonus_multiplier
+                                  * alloc_point
+                                  * web3.fromWei(reward_per_block, "ether")
+                          )
                 rewardValue = rewardTokenAmount * decimal.Decimal(wfx_price)
                 for token_index in range(len(reward_Token)):
                     reward_token_contract = web3.eth.contract(address=reward_Token[token_index], abi=lpAbi)
                     reward_token_symbol = reward_token_contract.functions.symbol().call()
-                    rewardValue += web3.fromWei(reward_Multiplier[token_index],
-                                                'ether') * rewardTokenAmount * decimal.Decimal(
-                        response_json[reward_token_symbol]["usd"])
+                    print("reward_token_symbol", reward_token_symbol)
+                    if reward_token_symbol == "BAVA":
+                        rewardValue += web3.fromWei(reward_Multiplier[token_index], 'ether') * rewardTokenAmount * decimal.Decimal(response_json["baklava"]["usd"])
+                    else:
+                        rewardValue += web3.fromWei(reward_Multiplier[token_index], 'ether') * rewardTokenAmount * decimal.Decimal(response_json[reward_token_symbol]["usd"])
                 apr = rewardValue / (tvl * total_alloc_point) * 100
-
+                    
             apy_daily = ((1 + apr / 36500) ** 365 - 1) * 100
             apy_weekly = ((1 + apr / 5200) ** 52 - 1) * 100
             apy_monthly = ((1 + apr / 1200) ** 12 - 1) * 100
@@ -181,7 +184,7 @@ def queryData():
         apy_daily_dict["apyDaily"][lp_token_pair_symbol] = str(apy_daily)
         lp_token_value_per_coin_dict["lpTokenValue"][lp_token_pair_symbol] = str(lp_token_value_per_coin)
 
-        # print("Apr", apr, "APY", apy_daily)
+        print("Apr", apr, "APY", apy_daily)
 
     # **************************************** Update data *******************
 
@@ -248,7 +251,7 @@ def getDB():
     collectionName1 = dbName["TVL"]
     collectionName2 = dbName["APR"]
     collectionName3 = dbName["APYDaily"]
-    print(datetime.datetime.now(), "done")
+    print("done")
 
     cursor1 = collectionName1.find({})
     for data1 in cursor1:
@@ -273,9 +276,9 @@ def minCheck():
         queryData()
         connectDB()
         updateDB()
-        print(datetime.datetime.now(), "done query data")
+        print("done query data")
     except Exception as e:
-        print(datetime.datetime.now(), "MinCheck Error happen")
+        print("MinCheck Error happen")
         logging.error(e)
 
 
@@ -299,12 +302,12 @@ def scheduleUpdate():
 
 def main():
     queryData()
-    # print("done query data")
+    print("done query data")
     connectDB()
     updateDB()
     # getDB()
 
-    # print("--- %s seconds ---" % (time.time() - start_time))
+    print("--- %s seconds ---" % (time.time() - start_time))
     scheduleUpdate()
 
 
